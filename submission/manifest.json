@@ -198,8 +198,8 @@
     "limitations": "Меняется по одному весу на ±20% с нормировкой суммы весов до 1. Проверяется состав топа, а не порядок внутри него, точность ролей, пороги, выборка betweenness или устойчивость к пропущенным данным."
   },
   "sha256": {
-    "nodes_roles.csv": "1913c17ec7977b53cb18bc0680a19ee09a0db82f15484bffff04449ec3c5e431",
-    "clusters.csv": "ff5fa707a5b9afb137f4f5c5adb70b5dc4b96dcf1cfc7cdad2098e73817a16ee",
-    "top_nodes.csv": "fe0214812abe5c1525c8768565f5a6b6b432e64a2d066bb7ad53442a9a004f81"
+    "nodes_roles.csv": "db615f4a9b6e1952ed95d03f7b07f6923e18f672a78ed0321347ace3e7325d6c",
+    "clusters.csv": "4aaacdaf07f120602f74eb664c270e31f6f6300023c99acfc331b009fabde70e",
+    "top_nodes.csv": "9e11af3be8bc410bf8415ce9789404df20a2fae2b0669fbfe93b6e799a76cd19"
   }
 }

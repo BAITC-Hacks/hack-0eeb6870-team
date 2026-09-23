@@ -1,0 +1,2 @@
+# Keep submission checksums stable on Windows, macOS and Linux checkouts.
+*.csv text eol=lf

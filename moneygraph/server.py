@@ -139,7 +139,7 @@ def handler_for(app):
                         return self.send(404, {"error": "Файл не найден"})
                     rows, fields = exports[name]
                     stream = io.StringIO(newline="")
-                    writer = csv.DictWriter(stream, fields, extrasaction="ignore")
+                    writer = csv.DictWriter(stream, fields, extrasaction="ignore", lineterminator="\n")
                     writer.writeheader()
                     writer.writerows(rows)
                     return self.send(200, stream.getvalue().encode("utf-8-sig"), "text/csv; charset=utf-8", name)
