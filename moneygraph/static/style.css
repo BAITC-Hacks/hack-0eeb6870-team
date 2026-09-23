@@ -91,7 +91,8 @@ h1{font-size:30px;line-height:1.2;font-weight:600;letter-spacing:-1.05px;margin:
 .graph-toolbar form button{border:0;padding:7px 10px 7px 4px;background:transparent;color:#6f8860;font-size:10px}
 .graph-toolbar select{width:119px;max-width:30%;padding:7px 20px 7px 10px;border:1px solid #e2e7dc;border-radius:5px;background:#fff;color:#7d906c;font-size:10px;text-overflow:ellipsis}
 .canvas-wrap{position:relative;height:480px;min-height:480px;flex:1;border-top:1px solid #edf0e8;border-bottom:1px solid #edf0e8;background-color:#fafcf8;background-image:radial-gradient(#d9e1d1 .8px,transparent .8px);background-size:19px 19px;overflow:hidden}
-canvas{display:block;width:100%;height:100%;cursor:grab;touch-action:none}
+/* Keep the drawing buffer out of intrinsic grid sizing during viewport changes. */
+canvas{position:absolute;inset:0;display:block;width:100%;height:100%;cursor:grab;touch-action:none}
 canvas:active{cursor:grabbing}
 .graph-caption{position:absolute;top:17px;left:19px;display:flex;align-items:center;gap:5px;color:#90a17e;font-size:9px;pointer-events:none}
 .graph-caption [data-icon]{width:12px;height:12px}
