@@ -121,7 +121,7 @@ def handler_for(app):
                     writer.writeheader()
                     writer.writerows(rows)
                     return self.send(200, stream.getvalue().encode("utf-8-sig"), "text/csv; charset=utf-8", name)
-                assets = {"/": "index.html", "/app.js": "app.js", "/style.css": "style.css"}
+                assets = {"/": "index.html", "/app.js": "app.js", "/icons.js": "icons.js", "/style.css": "style.css"}
                 if url.path in assets:
                     file = STATIC / assets[url.path]
                     kind = {".js": "text/javascript", ".css": "text/css", ".html": "text/html"}[file.suffix]
