@@ -46,9 +46,11 @@ def integer(v, label):
 
 
 def amount(v):
+    if isinstance(v, bool):
+        raise ValueError("sum_kzt: требуется число, не логическое значение")
     try:
         n = float(v)
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, OverflowError):
         raise ValueError("sum_kzt: требуется число") from None
     if not math.isfinite(n) or n <= 0:
         raise ValueError("sum_kzt: требуется конечное положительное число")
