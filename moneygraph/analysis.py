@@ -8,6 +8,7 @@ import math
 import time
 from collections import defaultdict, deque
 from datetime import datetime, timezone
+from numbers import Integral
 from pathlib import Path
 
 import networkx as nx
@@ -27,10 +28,11 @@ NODE_FIELDS = ["gid", "role", "role_score", "cluster_id", "priority_score", "evi
 CLUSTER_FIELDS = ["cluster_id", "n_nodes", "n_seed", "sum_kzt_internal", "top_gids", "hypothesis"]
 TOP_FIELDS = ["rank", "gid", "role", "priority_score", "why"]
 LIMITS = "Наблюдаются только внутрибанковские переводы ≥5 000 KZT за период выгрузки; входящие потоки неполны. Роль — гипотеза для проверки, не вывод о виновности."
+PRIORITY_WEIGHTS = {"volume": .25, "seed_reach": .25, "activity": .10, "bridge": .20, "role": .20}
 
 
 def integer(v, label):
-    if isinstance(v, bool) or v is None:
+    if isinstance(v, bool) or not isinstance(v, (Integral, str)):
         raise ValueError(f"{label}: нужен целый идентификатор/счётчик")
     try:
         n = int(v)
@@ -121,6 +123,27 @@ def normalize(tables):
     for pair, (s, n) in totals.items():
         if not math.isclose(s, edges[pair]["sum_kzt"], abs_tol=.02, rel_tol=1e-9) or n != edges[pair]["n_tx"]:
             raise ValueError(f"edges и transactions не согласованы для {pair}")
+    # The contract defines depth as the shortest directed distance from ANY seed.
+    # Checking only the range would silently turn a first-hop node into a boundary.
+    adjacency = defaultdict(list)
+    for a, b in edges:
+        adjacency[a].append(b)
+    distances = {gid: 0 for gid, node in nodes.items() if node["is_seed"]}
+    queue = deque(distances)
+    while queue:
+        source = queue.popleft()
+        for target in adjacency[source]:
+            if target not in distances:
+                distances[target] = distances[source] + 1
+                queue.append(target)
+    for gid, node in nodes.items():
+        if distances.get(gid) != node["depth"]:
+            observed = distances.get(gid, "недостижим от seed")
+            raise ValueError(f"gid={gid}: depth={node['depth']} не совпадает с минимальным коленом ({observed})")
+    for (a, b), edge in edges.items():
+        expected = nodes[a]["depth"] + 1
+        if edge["depth"] != expected:
+            raise ValueError(f"edges {a}→{b}: depth={edge['depth']}, ожидается колено обнаружения {expected}")
     return nodes, edges, sorted(tx, key=lambda t: (t["date"], t["src"], t["dst"], t["sum_kzt"]))
 
 
@@ -185,22 +208,99 @@ def weighted_pagerank(g, alpha=.85, tol=1e-10, max_iter=1000):
     raise ValueError("PageRank не сошёлся за 1000 итераций")
 
 
-def choose_role(m):
-    """Rules and precedence are part of the public method in README."""
+def role_rules(m):
+    """Evaluate the same canonical conditions used by classification and the UI."""
+    labels = {"depth": "Колено", "out_degree": "Получателей", "in_degree": "Отправителей",
+              "neighbor_clusters": "Кластеров среди соседей", "seed_reach": "Достижим от seed",
+              "is_seed": "Исходный seed", "pass_ratio": "Отдал / получил"}
+
+    def readable(value):
+        if value is None:
+            return "не определено"
+        if isinstance(value, bool):
+            return "да" if value else "нет"
+        return f"{value:.6g}" if isinstance(value, float) else str(value)
+
+    def condition(metric, op, threshold, expression=None):
+        actual = m[metric]
+        comparisons = {"==": lambda: actual == threshold, ">=": lambda: actual >= threshold,
+                       "<=": lambda: actual <= threshold, ">": lambda: actual > threshold,
+                       "<": lambda: actual < threshold}
+        passed = actual is not None and bool(comparisons[op]())
+        result = {"metric": metric, "label": labels[metric], "actual": actual, "operator": op,
+                  "threshold": threshold, "passed": passed,
+                  "explanation": f"{labels[metric]}: {readable(actual)}; условие {op} {readable(threshold)}"}
+        if expression:
+            result["threshold_expression"] = expression
+            result["explanation"] += f" ({expression})"
+        return result
+
+    definitions = [
+        ("boundary", "Граница наблюдения", "Колено = 4 и получателей = 0. Финансовая роль неизвестна.",
+         [condition("depth", "==", 4), condition("out_degree", "==", 0)],
+         "Отсутствие исходящих объясняется окончанием обхода; это не доказательство удержания средств."),
+        ("coordinator", ROLES["coordinator"],
+         "Не менее 3 кластеров среди соседей, достижим от не менее 3 seed, не менее 2 отправителей и 2 получателей.",
+         [condition("neighbor_clusters", ">=", 3), condition("seed_reach", ">=", 3),
+          condition("in_degree", ">=", 2), condition("out_degree", ">=", 2)],
+         "Это структурная гипотеза: связи между сообществами не доказывают управление другими клиентами."),
+        ("distributor", ROLES["distributor"],
+         "Получателей не менее 8 и не менее 2 × max(число отправителей, 1).",
+         [condition("out_degree", ">=", 8), condition("out_degree", ">=", 2 * max(m["in_degree"], 1),
+                                                       "2 × max(число отправителей, 1)")],
+         "Веерные переводы — наблюдаемый паттерн, но назначение платежей неизвестно."),
+        ("consolidator", ROLES["consolidator"],
+         "Не seed; отправителей не менее 4; отдал / получил не больше 0,35.",
+         [condition("is_seed", "==", False), condition("in_degree", ">=", 4), condition("pass_ratio", "<=", .35)],
+         "Остатки и внешние потоки неизвестны; низкая наблюдаемая доля исходящих не доказывает накопление на счёте."),
+        ("transit", ROLES["transit"],
+         "Не seed; есть отправители и получатели; отдал / получил от 0,8 до 1,2 включительно.",
+         [condition("is_seed", "==", False), condition("in_degree", ">", 0), condition("out_degree", ">", 0),
+          condition("pass_ratio", ">=", .8), condition("pass_ratio", "<=", 1.2)],
+         "Роль основана на суммах за период. FIFO за 48 часов — отдельная поддержка; без неё сквозной транзит не подтверждён."),
+        ("terminal", ROLES["terminal"], "Не seed; отправителей больше 0; получателей = 0; колено меньше 4.",
+         [condition("is_seed", "==", False), condition("in_degree", ">", 0), condition("out_degree", "==", 0),
+          condition("depth", "<", 4)],
+         "Видимых исходящих нет, но деньги могли уйти вне банка, периода или порога наблюдения."),
+    ]
+    rules = [{"rule_id": key, "label": label, "description": description, "precedence": order,
+              "conditions": conditions, "limitation": limitation,
+              "matched": all(c["passed"] for c in conditions)}
+             for order, (key, label, description, conditions, limitation) in enumerate(definitions, 1)]
+    rules.append({"rule_id": "peripheral", "label": ROLES["peripheral"], "precedence": 7,
+                  "description": "Ни одно из правил с приоритетами 1–6 не выполнено; определённая финансовая роль не установлена.",
+                  "conditions": [], "matched": not any(r["matched"] for r in rules),
+                  "limitation": "Недостаток признаков роли не означает низкую значимость клиента."})
+    return rules
+
+
+def role_decision(m):
+    rules = role_rules(m)
+    selected = next(rule for rule in rules if rule["matched"])
+    key = selected["rule_id"]
+    role = "peripheral" if key == "boundary" else key
     i, o, ratio = m["in_degree"], m["out_degree"], m["pass_ratio"]
-    if m["depth"] == 4 and o == 0:
-        return "peripheral", 0.0
-    if m["neighbor_clusters"] >= 3 and m["seed_reach"] >= 3 and i >= 2 and o >= 2:
-        return "coordinator", min(.85, .5 + .05 * m["neighbor_clusters"] + .02 * min(m["seed_reach"], 10))
-    if o >= 8 and o >= 2 * max(i, 1):
-        return "distributor", min(.95, .6 + .35 * min(o / 30, 1))
-    if not m["is_seed"] and i >= 4 and ratio is not None and ratio <= .35:
-        return "consolidator", min(.9, .55 + .2 * min(i / 12, 1) + .15 * (1 - ratio))
-    if not m["is_seed"] and i > 0 and o > 0 and ratio is not None and .8 <= ratio <= 1.2:
-        return "transit", min(.95, .6 + .2 * (1 - abs(1 - ratio) / .2) + .15 * m["fast_ratio"])
-    if not m["is_seed"] and i > 0 and o == 0 and m["depth"] < 4:
-        return "terminal", .5
-    return "peripheral", .2
+    if key == "boundary":
+        score = 0.
+    elif key == "coordinator":
+        score = min(.85, .5 + .05 * m["neighbor_clusters"] + .02 * min(m["seed_reach"], 10))
+    elif key == "distributor":
+        score = min(.95, .6 + .35 * min(o / 30, 1))
+    elif key == "consolidator":
+        score = min(.9, .55 + .2 * min(i / 12, 1) + .15 * (1 - ratio))
+    elif key == "transit":
+        score = min(.95, .6 + .2 * (1 - abs(1 - ratio) / .2) + .15 * m["fast_ratio"])
+    else:
+        score = .5 if key == "terminal" else .2
+    secondary = [] if key == "boundary" else [r["rule_id"] for r in rules
+                                               if r["matched"] and r["rule_id"] not in (key, "peripheral", "boundary")]
+    return role, score, {k: v for k, v in selected.items() if k != "matched"}, secondary
+
+
+def choose_role(m):
+    """Compatibility wrapper; the canonical conditions also drive explanations."""
+    role, score, _, _ = role_decision(m)
+    return role, score
 
 
 def pct_ranks(values):
@@ -209,6 +309,66 @@ def pct_ranks(values):
     import bisect
     return {k: (0 if v <= 0 else (bisect.bisect_left(positive, v) + bisect.bisect_right(positive, v) + 1) / (2 * len(positive)))
             for k, v in values.items()}
+
+
+def priority_sensitivity(rows, features):
+    """One-at-a-time weight sensitivity; reuses metrics, never repeats graph work."""
+    top_k = min(20, len(rows))
+    baseline = {r["gid"] for r in rows[:top_k]}
+    scenarios = []
+    for changed in PRIORITY_WEIGHTS:
+        for multiplier in (.8, 1.2):
+            weights = dict(PRIORITY_WEIGHTS)
+            weights[changed] *= multiplier
+            total = sum(weights.values())
+            weights = {name: weight / total for name, weight in weights.items()}
+            scores = {gid: round(min(1., sum(round(weights[name] * value, 6)
+                                                   for name, value in signal.items())), 6)
+                      for gid, signal in features.items()}
+            ranked = sorted(scores, key=lambda gid: (-scores[gid], gid))[:top_k]
+            overlap = len(baseline.intersection(ranked))
+            scenarios.append({"changed_weight": changed, "multiplier": multiplier,
+                              "weights": weights, "top_k_overlap": overlap,
+                              "overlap_ratio": round(overlap / top_k, 6) if top_k else 1.,
+                              "entered_gids": sorted(set(ranked) - baseline),
+                              "left_gids": sorted(baseline - set(ranked))})
+    minimum = min(s["overlap_ratio"] for s in scenarios)
+    mean = sum(s["overlap_ratio"] for s in scenarios) / len(scenarios)
+    limitations = ("Меняется по одному весу на ±20% с нормировкой суммы весов до 1. "
+                   "Проверяется состав топа, а не порядок внутри него, точность ролей, пороги, "
+                   "выборка betweenness или устойчивость к пропущенным данным.")
+    return {"top_k": top_k, "baseline_weights": PRIORITY_WEIGHTS.copy(), "scenarios": scenarios,
+            "min_overlap_ratio": minimum, "mean_overlap_ratio": round(mean, 6),
+            "summary": f"Чувствительность весов: в 10 сценариях ±20% сохраняется минимум {minimum:.0%} состава топ-{top_k}; среднее {mean:.0%}.",
+            "limitations": limitations}
+
+
+def cluster_hypothesis(members, rows_by_id, internal, incoming, outgoing, n_seed):
+    counts = {role: sum(rows_by_id[v]["role"] == role for v in members) for role in ROLES}
+    boundary = sum(rows_by_id[v]["truncated_by_depth"] for v in members)
+    if internal + incoming + outgoing == 0:
+        purpose = "Назначение не определено: наблюдаемых переводов нет"
+    elif boundary == len(members):
+        purpose = "Граница наблюдения: назначение и дальнейшее движение средств неизвестны"
+    elif counts["consolidator"] and counts["distributor"]:
+        purpose = "Кандидат на участок сбора и последующего распределения средств"
+    elif counts["consolidator"]:
+        purpose = "Кандидат на участок консолидации средств"
+    elif counts["distributor"]:
+        purpose = "Кандидат на участок веерного распределения средств"
+    elif counts["transit"]:
+        purpose = "Кандидат на промежуточный участок движения средств по соотношению потоков"
+    elif counts["coordinator"]:
+        purpose = "Кандидат на связующий участок между сообществами"
+    elif counts["terminal"]:
+        purpose = "Наблюдаемый участок получения средств; единый финансовый центр не установлен"
+    else:
+        purpose = "Финансовое назначение по текущим признакам не определено"
+    support = "; ".join(f"{ROLES[role].lower()}: {count}" for role, count in counts.items() if count)
+    hypothesis = (f"{purpose}. Узлов {len(members)}, seed {n_seed}; внутренний оборот {internal:,.2f} KZT; "
+                  f"из других кластеров {incoming:,.2f}, в другие кластеры {outgoing:,.2f} KZT. "
+                  f"Роли: {support}. Граница: {boundary}. Гипотеза по неполной выборке, не доказательство единой группы.")
+    return hypothesis, counts, boundary
 
 
 def analyze(tables, demo=False):
@@ -257,7 +417,16 @@ def analyze(tables, demo=False):
                  in_deg=len(senders), out_deg=len(receivers), in_kzt=round(si, 2), out_kzt=round(so, 2),
                  pass_through=so / si if si else None,
                  truncated_by_depth=nodes[gid]["depth"] == 4 and len(receivers) == 0)
-        role, score = choose_role(m)
+        role, score, rule, secondary = role_decision(m)
+        temporal = {"status": "matched" if m["fast_sum"] > 0 else "not_observed", "window_hours": 48,
+                    "matched_kzt": m["fast_sum"], "ratio": m["fast_ratio"]}
+        temporal["note"] = (
+            f"FIFO за 48 часов: сопоставлено {m['fast_sum']:,.2f} KZT ({m['fast_ratio']:.1%} входящего объёма). "
+            "Это временная связь, не доказательство происхождения средств."
+            if m["fast_sum"] > 0 else
+            "Временная поддержка не наблюдается: FIFO за 48 часов сопоставил 0 KZT. "
+            "При данных по дням переводы в один день не сопоставляются; это не доказывает отсутствие транзита."
+        )
         reasons = {
             "boundary": "Граница 4-го колена: исходящие не наблюдаются; роль не определена",
             "coordinator": f"Связи с {m['neighbor_clusters']} кластерами; достижим от {m['seed_reach']} seed; гипотеза координации",
@@ -270,17 +439,20 @@ def analyze(tables, demo=False):
         evidence = reasons["boundary"] if m["truncated_by_depth"] else reasons[role]
         if m["is_seed"]:
             evidence += "; входящие seed неполны"
-        rows.append(dict(m, role=role, role_score=round(score, 4), evidence=evidence[:200]))
+        rows.append(dict(m, role=role, role_score=round(score, 4), evidence=evidence[:200],
+                         role_rule=rule, secondary_roles=secondary, temporal_support=temporal))
     volume = pct_ranks({r["gid"]: r["sum_in"] + r["sum_out"] for r in rows})
     bridge = pct_ranks(centrality)
     seed_rank = pct_ranks({r["gid"]: r["seed_reach"] for r in rows})
     activity_rank = pct_ranks({r["gid"]: r["in_tx"] + r["out_tx"] for r in rows})
+    priority_features = {}
     for r in rows:
         gid = r["gid"]
         signal = r["role_score"] if r["role"] not in ("peripheral", "boundary") else 0
-        factors = {"volume": round(.25 * volume[gid], 6), "seed_reach": round(.25 * seed_rank[gid], 6),
-                   "activity": round(.10 * activity_rank[gid], 6),
-                   "bridge": round(.20 * bridge[gid], 6), "role": round(.20 * signal, 6)}
+        priority_features[gid] = {"volume": volume[gid], "seed_reach": seed_rank[gid],
+                                  "activity": activity_rank[gid], "bridge": bridge[gid], "role": signal}
+        factors = {name: round(PRIORITY_WEIGHTS[name] * value, 6)
+                   for name, value in priority_features[gid].items()}
         r["priority_factors"] = factors
         r["priority_score"] = round(min(1., sum(factors.values())), 6)
         r["color"] = COLORS["boundary"] if r["truncated_by_depth"] else COLORS[r["role"]]
@@ -291,11 +463,15 @@ def analyze(tables, demo=False):
     for cid, c in enumerate(communities):
         ranked = sorted(c, key=lambda v: (-by_id[v]["priority_score"], v))
         internal = sum(e["sum_kzt"] for (a, b), e in edges.items() if a in c and b in c)
-        leaders = [by_id[v] for v in ranked[:3]]
-        hypothesis = "; ".join(f"{v['gid']}: {ROLES[v['role']].lower()}" for v in leaders)
-        cluster_rows.append({"cluster_id": cid, "n_nodes": len(c), "n_seed": sum(nodes[v]["is_seed"] for v in c),
+        incoming = sum(e["sum_kzt"] for (a, b), e in edges.items() if a not in c and b in c)
+        outgoing = sum(e["sum_kzt"] for (a, b), e in edges.items() if a in c and b not in c)
+        n_seed = sum(nodes[v]["is_seed"] for v in c)
+        hypothesis, role_counts, boundary = cluster_hypothesis(c, by_id, internal, incoming, outgoing, n_seed)
+        cluster_rows.append({"cluster_id": cid, "n_nodes": len(c), "n_seed": n_seed,
                              "sum_kzt_internal": round(internal, 2), "top_gids": ";".join(map(str, ranked[:5])),
-                             "hypothesis": "Гипотезы по ведущим узлам: " + hypothesis})
+                             "hypothesis": hypothesis, "sum_kzt_incoming_external": round(incoming, 2),
+                             "sum_kzt_outgoing_external": round(outgoing, 2), "role_counts": role_counts,
+                             "n_boundary": boundary})
     # Deterministic layout, computed once. No external JavaScript/CDN dependency.
     positions = {}
     columns = max(1, math.ceil(math.sqrt(len(communities))))
@@ -321,6 +497,7 @@ def analyze(tables, demo=False):
     canonical = {"nodes": [nodes[v] for v in sorted(nodes)], "edges": [edges[p] for p in sorted(edges)],
                  "transactions": [{**t, "date": t["date"].isoformat()} for t in tx]}
     dataset_hash = hashlib.sha256(json.dumps(canonical, sort_keys=True).encode()).hexdigest()[:16]
+    sensitivity = priority_sensitivity(rows, priority_features)
     return {"nodes": rows, "edges": list(edges.values()), "clusters": cluster_rows,
             "transactions": canonical["transactions"], "meta": {
                 "demo": demo, "dataset_hash": dataset_hash, "n_nodes": len(nodes), "n_edges": len(edges),
@@ -333,6 +510,7 @@ def analyze(tables, demo=False):
                 "turnover": round(sum(e["sum_kzt"] for e in edges.values()), 2),
                 "period": [tx[0]["date"].date().isoformat(), tx[-1]["date"].date().isoformat()] if tx else [],
                 "elapsed_seconds": round(time.perf_counter() - start, 3),
+                "priority_sensitivity": sensitivity,
                 "warnings": warnings, "limitations": LIMITS, "roles": ROLES, "colors": COLORS,
             }}
 

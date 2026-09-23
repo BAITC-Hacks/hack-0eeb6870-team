@@ -1,0 +1,205 @@
+{
+  "dataset_hash": "5a6e5240a354d66c",
+  "demo": false,
+  "n_nodes": 2248,
+  "n_edges": 3119,
+  "n_transactions": 4840,
+  "n_clusters": 88,
+  "n_boundary": 444,
+  "limitations": "Наблюдаются только внутрибанковские переводы ≥5 000 KZT за период выгрузки; входящие потоки неполны. Роль — гипотеза для проверки, не вывод о виновности.",
+  "priority_sensitivity": {
+    "top_k": 20,
+    "baseline_weights": {
+      "volume": 0.25,
+      "seed_reach": 0.25,
+      "activity": 0.1,
+      "bridge": 0.2,
+      "role": 0.2
+    },
+    "scenarios": [
+      {
+        "changed_weight": "volume",
+        "multiplier": 0.8,
+        "weights": {
+          "volume": 0.21052631578947367,
+          "seed_reach": 0.2631578947368421,
+          "activity": 0.10526315789473684,
+          "bridge": 0.21052631578947367,
+          "role": 0.21052631578947367
+        },
+        "top_k_overlap": 19,
+        "overlap_ratio": 0.95,
+        "entered_gids": [
+          100000004351795100
+        ],
+        "left_gids": [
+          100000008547948100
+        ]
+      },
+      {
+        "changed_weight": "volume",
+        "multiplier": 1.2,
+        "weights": {
+          "volume": 0.2857142857142857,
+          "seed_reach": 0.23809523809523808,
+          "activity": 0.09523809523809523,
+          "bridge": 0.19047619047619047,
+          "role": 0.19047619047619047
+        },
+        "top_k_overlap": 20,
+        "overlap_ratio": 1.0,
+        "entered_gids": [],
+        "left_gids": []
+      },
+      {
+        "changed_weight": "seed_reach",
+        "multiplier": 0.8,
+        "weights": {
+          "volume": 0.2631578947368421,
+          "seed_reach": 0.21052631578947367,
+          "activity": 0.10526315789473684,
+          "bridge": 0.21052631578947367,
+          "role": 0.21052631578947367
+        },
+        "top_k_overlap": 18,
+        "overlap_ratio": 0.9,
+        "entered_gids": [
+          100000004351795100,
+          100000008477350100
+        ],
+        "left_gids": [
+          100000003115284100,
+          100000008512827100
+        ]
+      },
+      {
+        "changed_weight": "seed_reach",
+        "multiplier": 1.2,
+        "weights": {
+          "volume": 0.23809523809523808,
+          "seed_reach": 0.2857142857142857,
+          "activity": 0.09523809523809523,
+          "bridge": 0.19047619047619047,
+          "role": 0.19047619047619047
+        },
+        "top_k_overlap": 19,
+        "overlap_ratio": 0.95,
+        "entered_gids": [
+          100000005527892100
+        ],
+        "left_gids": [
+          100000001857829100
+        ]
+      },
+      {
+        "changed_weight": "activity",
+        "multiplier": 0.8,
+        "weights": {
+          "volume": 0.25510204081632654,
+          "seed_reach": 0.25510204081632654,
+          "activity": 0.08163265306122451,
+          "bridge": 0.20408163265306123,
+          "role": 0.20408163265306123
+        },
+        "top_k_overlap": 20,
+        "overlap_ratio": 1.0,
+        "entered_gids": [],
+        "left_gids": []
+      },
+      {
+        "changed_weight": "activity",
+        "multiplier": 1.2,
+        "weights": {
+          "volume": 0.24509803921568626,
+          "seed_reach": 0.24509803921568626,
+          "activity": 0.11764705882352941,
+          "bridge": 0.19607843137254902,
+          "role": 0.19607843137254902
+        },
+        "top_k_overlap": 20,
+        "overlap_ratio": 1.0,
+        "entered_gids": [],
+        "left_gids": []
+      },
+      {
+        "changed_weight": "bridge",
+        "multiplier": 0.8,
+        "weights": {
+          "volume": 0.26041666666666663,
+          "seed_reach": 0.26041666666666663,
+          "activity": 0.10416666666666666,
+          "bridge": 0.16666666666666669,
+          "role": 0.20833333333333331
+        },
+        "top_k_overlap": 20,
+        "overlap_ratio": 1.0,
+        "entered_gids": [],
+        "left_gids": []
+      },
+      {
+        "changed_weight": "bridge",
+        "multiplier": 1.2,
+        "weights": {
+          "volume": 0.24038461538461536,
+          "seed_reach": 0.24038461538461536,
+          "activity": 0.09615384615384616,
+          "bridge": 0.23076923076923075,
+          "role": 0.19230769230769232
+        },
+        "top_k_overlap": 18,
+        "overlap_ratio": 0.9,
+        "entered_gids": [
+          100000004351795100,
+          100000008477350100
+        ],
+        "left_gids": [
+          100000003115284100,
+          100000008512827100
+        ]
+      },
+      {
+        "changed_weight": "role",
+        "multiplier": 0.8,
+        "weights": {
+          "volume": 0.26041666666666663,
+          "seed_reach": 0.26041666666666663,
+          "activity": 0.10416666666666666,
+          "bridge": 0.20833333333333331,
+          "role": 0.16666666666666669
+        },
+        "top_k_overlap": 19,
+        "overlap_ratio": 0.95,
+        "entered_gids": [
+          100000008477350100
+        ],
+        "left_gids": [
+          100000001857829100
+        ]
+      },
+      {
+        "changed_weight": "role",
+        "multiplier": 1.2,
+        "weights": {
+          "volume": 0.24038461538461536,
+          "seed_reach": 0.24038461538461536,
+          "activity": 0.09615384615384616,
+          "bridge": 0.19230769230769232,
+          "role": 0.23076923076923075
+        },
+        "top_k_overlap": 20,
+        "overlap_ratio": 1.0,
+        "entered_gids": [],
+        "left_gids": []
+      }
+    ],
+    "min_overlap_ratio": 0.9,
+    "mean_overlap_ratio": 0.965,
+    "summary": "Чувствительность весов: в 10 сценариях ±20% сохраняется минимум 90% состава топ-20; среднее 97%.",
+    "limitations": "Меняется по одному весу на ±20% с нормировкой суммы весов до 1. Проверяется состав топа, а не порядок внутри него, точность ролей, пороги, выборка betweenness или устойчивость к пропущенным данным."
+  },
+  "sha256": {
+    "nodes_roles.csv": "1913c17ec7977b53cb18bc0680a19ee09a0db82f15484bffff04449ec3c5e431",
+    "clusters.csv": "ff5fa707a5b9afb137f4f5c5adb70b5dc4b96dcf1cfc7cdad2098e73817a16ee",
+    "top_nodes.csv": "fe0214812abe5c1525c8768565f5a6b6b432e64a2d066bb7ad53442a9a004f81"
+  }
+}

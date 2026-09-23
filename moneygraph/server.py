@@ -16,12 +16,20 @@ from .analysis import analyze, export, NODE_FIELDS, CLUSTER_FIELDS, TOP_FIELDS
 from .assistant import Assistant, wire
 
 STATIC = Path(__file__).parent / "static"
+TABLE_FIELDS = {
+    "nodes": ["gid", "depth", "is_seed"],
+    "edges": ["src", "dst", "sum_kzt", "n_tx", "depth"],
+    "transactions": ["src", "dst", "date", "sum_kzt"],
+}
+MAX_DECODED_BYTES = 100_000_000
 
 
 class App:
     def __init__(self, result, output):
         self.current = (result, Assistant(result))
-        self.output = Path(output)
+        self.output_root = Path(output)
+        self.output = self.output_root
+        self.budget = self.assistant.budget
         self.lock = threading.Lock()
 
     @property
@@ -38,6 +46,7 @@ class App:
         try:
             with zipfile.ZipFile(io.BytesIO(payload)) as z:
                 tables = {}
+                decoded_bytes = 0
                 for name in ("nodes", "edges", "transactions"):
                     candidates = [i for i in z.infolist() if Path(i.filename).name == f"{name}.parquet"]
                     if len(candidates) != 1:
@@ -46,22 +55,35 @@ class App:
                     if info.file_size > 50_000_000:
                         raise ValueError("Размер одного Parquet не должен превышать 50 MB")
                     # Read in memory; never extract user-controlled archive paths.
-                    table = pq.read_table(io.BytesIO(z.read(info)))
-                    if table.num_rows > 250_000:
-                        raise ValueError("Прототип принимает до 250 000 строк в каждой таблице")
+                    parquet = pq.ParquetFile(io.BytesIO(z.read(info)))
+                    row_limit = 10_000 if name == "nodes" else 250_000
+                    if parquet.metadata.num_rows > row_limit:
+                        raise ValueError(f"Лимит таблицы {name}: {row_limit} строк")
+                    fields = TABLE_FIELDS[name]
+                    if not set(fields).issubset(parquet.schema_arrow.names):
+                        raise ValueError(f"{name}: отсутствуют обязательные поля")
+                    # Inspect metadata before materialising arrays, and never decode
+                    # unrelated columns supplied by an uploaded file.
+                    for group in range(parquet.metadata.num_row_groups):
+                        metadata = parquet.metadata.row_group(group)
+                        for column in range(metadata.num_columns):
+                            item = metadata.column(column)
+                            if item.path_in_schema.split('.')[0] in fields:
+                                decoded_bytes += item.total_uncompressed_size
+                    if decoded_bytes > MAX_DECODED_BYTES:
+                        raise ValueError("Распакованные колонки Parquet превышают лимит 100 MB")
+                    table = parquet.read(columns=fields)
                     tables[name] = table.to_pylist()
                 demo = any(Path(i.filename).name == "DEMO.txt" for i in z.infolist())
             if len(tables["nodes"]) > 10_000:
                 raise ValueError("Лимит интерактивного прототипа: 10 000 узлов")
             result = analyze(tables, demo=demo)
             # Separate versions prevent partial CSV downloads during a rebuild.
-            destination = self.output / ("dataset-" + result["meta"]["dataset_hash"])
+            destination = self.output_root / ("dataset-" + result["meta"]["dataset_hash"])
             export(result, destination)
-            assistant = Assistant(result)
-            with self.assistant.lock:
-                assistant.calls = self.assistant.calls  # uploads must not reset API budget
-                self.output = destination
-                self.current = (result, assistant)
+            assistant = Assistant(result, budget=self.budget)
+            self.output = destination
+            self.current = (result, assistant)
             return result["meta"]
         finally:
             self.lock.release()
@@ -135,7 +157,7 @@ def handler_for(app):
                 return self.send(403, {"error": "Разрешены только локальные запросы"})
             try:
                 size = int(self.headers.get("Content-Length", "0"))
-                maximum = 50_000_000 if self.path == "/api/upload" else 8_000
+                maximum = 50_000_000 if self.path == "/api/upload" else 32_000
                 if not 0 < size <= maximum:
                     return self.send(413, {"error": "Недопустимый размер запроса"})
                 body = self.rfile.read(size)
@@ -145,7 +167,13 @@ def handler_for(app):
                     data = json.loads(body)
                     if not isinstance(data, dict) or not isinstance(data.get("use_ai", False), bool):
                         raise ValueError("Некорректный запрос")
-                    return self.send(200, app.assistant.answer(data.get("question"), data.get("selected"), data.get("use_ai", False)))
+                    result, assistant = app.current
+                    dataset_hash = result["meta"]["dataset_hash"]
+                    if data.get("dataset_hash", dataset_hash) != dataset_hash:
+                        return self.send(409, {"error": "Набор данных изменился. Обновите страницу и повторите вопрос."})
+                    reply = assistant.answer(data.get("question"), data.get("selected"),
+                                             data.get("use_ai", False), history=data.get("history"))
+                    return self.send(200, dict(reply, dataset_hash=dataset_hash))
                 return self.send(404, {"error": "Не найдено"})
             except (ValueError, TypeError, KeyError, zipfile.BadZipFile) as e:
                 return self.send(400, {"error": str(e)})
