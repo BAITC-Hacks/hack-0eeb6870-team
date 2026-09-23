@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="810" viewBox="0 0 1440 810">
+<defs><marker id="a" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0 0L10 5L0 10" fill="none" stroke="#648777" stroke-width="1.5"/></marker></defs>
+<rect width="1440" height="810" fill="#f4f6f2"/><rect width="24" height="810" fill="#193c36"/>
+<g font-family="Segoe UI,Arial,sans-serif" fill="#263e41">
+<text x="76" y="76" font-size="16" letter-spacing="3" fill="#648578">MONEYGRAPH / HACKALEM AI</text>
+<text x="76" y="145" font-size="44" font-weight="600">От транзакций к объяснимым гипотезам</text>
+<text x="76" y="190" font-size="21" fill="#7a898a">Локальные расчёты определяют роли. Аналитик проверяет основания.</text>
+<g stroke="#d8e2d7" fill="white"><rect x="76" y="255" width="258" height="220" rx="12"/><rect x="410" y="255" width="270" height="220" rx="12"/><rect x="756" y="255" width="274" height="220" rx="12"/><rect x="1106" y="255" width="258" height="220" rx="12"/></g>
+<g font-size="15" fill="#739079"><text x="100" y="291">01 / ДАННЫЕ</text><text x="434" y="291">02 / АНАЛИЗ</text><text x="780" y="291">03 / РЕЗУЛЬТАТ</text><text x="1130" y="291">04 / ПРОВЕРКА</text></g>
+<g font-size="23" font-weight="600"><text x="100" y="335">Три Parquet</text><text x="434" y="335">Граф и правила</text><text x="780" y="335">Роли и приоритеты</text><text x="1130" y="335">Рабочий экран</text></g>
+<g font-size="18" fill="#6b8072"><text x="100" y="374">Узлы · связи · переводы</text><text x="100" y="408">Проверка согласованности</text><text x="100" y="442">Сохранение всех seed</text><text x="434" y="374">Метрики · Louvain · FIFO</text><text x="434" y="408">Учёт обрыва 4-го колена</text><text x="434" y="442">Без обучения модели</text><text x="780" y="374">Три CSV и основания</text><text x="780" y="408">Версионированный набор</text><text x="780" y="442">Воспроизводимый расчёт</text><text x="1130" y="374">Граф · поиск · карточки</text><text x="1130" y="408">Кластеры и топ-лист</text><text x="1130" y="442">Проверка гипотез</text></g>
+<g stroke="#648777" stroke-width="2" marker-end="url(#a)"><path d="M342 363H396"/><path d="M688 363H742"/><path d="M1038 363H1092"/><path d="M894 489V548"/></g>
+<rect x="410" y="562" width="954" height="138" rx="12" fill="#e5eee2" stroke="#ccdccc"/>
+<text x="438" y="601" font-size="20" font-weight="600">NVIDIA API · необязательный ассистент</text>
+<text x="438" y="641" font-size="18">Вопрос → вызов разрешённой функции → проверенные метрики → ответ со ссылками на gid</text>
+<text x="438" y="675" font-size="16" fill="#6b8072">Не меняет роли или CSV. Без API доступны локальные ответы. Решения принимает аналитик.</text>
+<text x="76" y="761" font-size="15" fill="#82917f">Один локальный запуск · без GPU · офлайн-интерфейс · гипотезы вместо обвинений</text>
+</g></svg>
