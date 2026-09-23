@@ -1,0 +1,16 @@
+{
+  "date": "2026-09-23",
+  "url": "http://127.0.0.1:8791",
+  "upstream": "f9542ab",
+  "baselineHealthScore": 97.6,
+  "healthScore": 100,
+  "scope": "Local synthetic demo; real dataset and external LLM unavailable",
+  "issues": [],
+  "resolvedIssues": [
+    {"id": "ISSUE-001", "title": "Canvas intrinsic sizing expands graph after viewport resize", "severity": "medium", "category": "visual", "status": "verified", "commit": "3e000e9"},
+    {"id": "ISSUE-002", "title": "CRLF/LF mismatch invalidates submission checksums", "severity": "medium", "category": "functional", "status": "verified", "commit": "b81ec87"}
+  ],
+  "categoryScores": {"console": 100, "links": 100, "visual": 100, "functional": 100, "ux": 100, "performance": 100, "content": 100, "accessibility": 100},
+  "tests": {"pythonPassed": 60, "pythonSkipped": 6, "uiRegressions": "passed"},
+  "limitations": ["Real organizer Parquet absent", "External LLM not configured", "GitHub CI blocked by account billing"]
+}

@@ -64,6 +64,7 @@ async function boot() {
     remove() { if (this.parentElement) this.parentElement.children = this.parentElement.children.filter(child => child !== this); }
     addEventListener(name, handler) { this.listeners[name] = handler; }
     setAttribute(name, value) { this.attributes[name] = value; }
+    removeAttribute(name) { delete this.attributes[name]; }
     querySelector(selector) {
       const name = selector.slice(1);
       for (const child of this.children) {
@@ -74,7 +75,7 @@ async function boot() {
       return null;
     }
     getBoundingClientRect() { return {width: 600, height: 500, left: 0, top: 0}; }
-    getContext() { return new Proxy({}, {get: (target, name) => target[name] || (() => {})}); }
+    getContext() { return new Proxy({measureText: text => ({width: text.length * 6})}, {get: (target, name) => target[name] || (() => {})}); }
     setPointerCapture() {}
     scrollIntoView() {}
     focus() {}

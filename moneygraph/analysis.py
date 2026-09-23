@@ -519,7 +519,7 @@ def analyze(tables, demo=False):
 
 def write_csv(path, rows, fields):
     with Path(path).open("w", encoding="utf-8-sig", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
+        writer = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore", lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
 
