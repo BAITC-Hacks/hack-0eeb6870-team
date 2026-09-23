@@ -4,6 +4,8 @@ __pycache__/
 data/
 results/
 uploads/
+ci-results/
+ci-submission/
 *.log
 
 .env.*
